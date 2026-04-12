@@ -19,13 +19,16 @@ package controller
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	platformv1 "github.com/gappylul/webapp-operator/api/v1"
 )
@@ -33,14 +36,15 @@ import (
 var _ = Describe("WebApp Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
-
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
+
 		webapp := &platformv1.WebApp{}
+		replicas := int32(1)
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind WebApp")
@@ -51,21 +55,24 @@ var _ = Describe("WebApp Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: platformv1.WebAppSpec{
+						Image:    "nginx:alpine",
+						Host:     "test.local",
+						Replicas: &replicas,
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &platformv1.WebApp{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
-
 			By("Cleanup the specific resource instance WebApp")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &WebAppReconciler{
@@ -77,8 +84,23 @@ var _ = Describe("WebApp Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Verifying the Deployment was created")
+			deployment := &appsv1.Deployment{}
+			err = k8sClient.Get(ctx, typeNamespacedName, deployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx:alpine"))
+
+			By("Verifying the Service was created")
+			service := &corev1.Service{}
+			err = k8sClient.Get(ctx, typeNamespacedName, service)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the Ingress was created")
+			ingress := &networkingv1.Ingress{}
+			err = k8sClient.Get(ctx, typeNamespacedName, ingress)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ingress.Spec.Rules[0].Host).To(Equal("test.local"))
 		})
 	})
 })

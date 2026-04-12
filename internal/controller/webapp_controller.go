@@ -125,9 +125,10 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 		return err
 	}
 
+	patch := client.MergeFrom(existing.DeepCopy())
 	existing.Spec.Replicas = desired.Spec.Replicas
 	existing.Spec.Template.Spec.Containers[0].Image = desired.Spec.Template.Spec.Containers[0].Image
-	return r.Update(ctx, existing)
+	return r.Patch(ctx, existing, patch)
 }
 
 func (r *WebAppReconciler) reconcileService(ctx context.Context, webapp *platformv1.WebApp) error {
