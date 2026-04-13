@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,6 +32,9 @@ type WebAppSpec struct {
 
 	// +kubebuilder:validation:Required
 	Host string `json:"host"`
+
+	// +optional
+	Env []v1.EnvVar `json:"env,omitempty"`
 }
 
 // WebAppStatus defines the observed state of WebApp.

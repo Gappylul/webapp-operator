@@ -105,6 +105,16 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 8080},
 							},
+							Env: func() []corev1.EnvVar {
+								var envs []corev1.EnvVar
+								for _, e := range webapp.Spec.Env {
+									envs = append(envs, corev1.EnvVar{
+										Name:  e.Name,
+										Value: e.Value,
+									})
+								}
+								return envs
+							}(),
 						},
 					},
 				},
