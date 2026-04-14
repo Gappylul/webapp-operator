@@ -1,135 +1,100 @@
 # webapp-operator
-// TODO(user): Add simple overview of use/purpose
+
+A custom Kubernetes Operator designed for Raspberry Pi clusters (k3s) to automate the deployment of web applications using the `WebApp` Custom Resource.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+This operator manages the lifecycle of web applications on k3s. It watches for `WebApp` resources and automatically generates:
+* **Deployment**: Runs your container image with specified replicas and environment variables.
+* **Service**: A ClusterIP service mapping port `80` to container port `8080`.
+* **Ingress**: Configured specifically for **Traefik** (k3s default), handling routing based on your provided `host`.
 
-## Getting Started
+The controller is optimized for lightweight environments like the Raspberry Pi, ensuring your web stack is consistent and self-healing.
 
-### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+---
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+## Technical Specifications (CRD)
 
-```sh
-make docker-build docker-push IMG=<some-registry>/webapp-operator:tag
-```
+The `WebApp` resource (`platform.gappy.hu/v1`) supports the following configuration:
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `image` | `string` | **Yes** | The container image (Ensure it is compatible with ARM/Pi architecture). |
+| `host` | `string` | **Yes** | The DNS host (e.g., `myapp.local` or a Pi-hole entry). |
+| `replicas` | `int32` | No | Number of desired pods (Default: `1`). |
+| `env` | `[]EnvVar` | No | List of environment variables for the application. |
 
-**Install the CRDs into the cluster:**
+---
 
-```sh
-make install
-```
+## Local Development & Deployment (k3s)
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+Since this project is running on **k3s (Raspberry Pi)**, use the following workflow to generate manifests and deploy.
 
-```sh
-make deploy IMG=<some-registry>/webapp-operator:tag
-```
-
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
-
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+### 1. Generate Manifests
+Generate the Custom Resource Definitions (CRDs) and RBAC configurations:
 
 ```sh
-kubectl apply -k config/samples/
+make manifests
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+### 2. Build the Operator
+Build the controller binary:
 
 ```sh
-kubectl delete -k config/samples/
+make build
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+### 3. Deploy to k3s
+After building, follow these steps to apply the configuration to your Pi cluster:
+**Install the CRDs:**
 
 ```sh
-make uninstall
+kubectl apply -f config/crd/bases/platform.gappy.hu_webapps.yaml
 ```
 
-**UnDeploy the controller from the cluster:**
+**Run the Operator:**
+You can run the operator directly on your Pi (or as a deployment) to start reconciling resources:
 
 ```sh
-make undeploy
+# To run locally for testing:
+./bin/manager
 ```
 
-## Project Distribution
+### 4. Create a WebApp Instance
+Create a file named `my-app.yaml`:
+```yaml
+apiVersion: platform.gappy.hu/v1
+kind: WebApp
+metadata:
+  name: pi-web-app
+spec:
+  image: nginx:alpine # Or your custom ARM-based image
+  replicas: 2
+  host: pi-app.local
+  env:
+    - name: APP_COLOR
+      value: "raspberry-red"
+```
 
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
+Apply it using kubectl:
 
 ```sh
-make build-installer IMG=<some-registry>/webapp-operator:tag
+kubectl apply -f my-app.yaml
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+### k3s Specific Notes
 
-2. Using the installer
+- **Traefik Integration**: This operator automatically adds the annotation\
+`traefik.ingress.kubernetes.io/router.entrypoints: web` to the generated Ingress,\
+matching the default k3s Traefik configuration.
+- **Architecture**: Ensure the `image` defined in your `WebApp` spec is compatible with\
+`arm64` or `armv7` depending on your Raspberry Pi model.
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
+### Troubleshooting
+Check the operator logs to see the reconciliation process:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/webapp-operator/<tag or branch>/dist/install.yaml
+kubectl logs -l control-plane=controller-manager -n webapp-operator-system
 ```
 
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+### License
+Copyright 2026. Licensed under the Apache License, Version 2.0.
