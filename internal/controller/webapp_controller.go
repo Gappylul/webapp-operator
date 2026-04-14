@@ -106,7 +106,7 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 								{ContainerPort: 8080},
 							},
 							Env: func() []corev1.EnvVar {
-								var envs []corev1.EnvVar
+								envs := make([]corev1.EnvVar, 0, len(webapp.Spec.Env))
 								for _, e := range webapp.Spec.Env {
 									envs = append(envs, corev1.EnvVar{
 										Name:  e.Name,
@@ -138,6 +138,7 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 	patch := client.MergeFrom(existing.DeepCopy())
 	existing.Spec.Replicas = desired.Spec.Replicas
 	existing.Spec.Template.Spec.Containers[0].Image = desired.Spec.Template.Spec.Containers[0].Image
+	existing.Spec.Template.Spec.Containers[0].Env = desired.Spec.Template.Spec.Containers[0].Env
 	return r.Patch(ctx, existing, patch)
 }
 
