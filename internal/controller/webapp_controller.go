@@ -48,6 +48,7 @@ type WebAppReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -83,6 +84,17 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 		replicas = *webapp.Spec.Replicas
 	}
 
+	secretName := fmt.Sprintf("%s-secrets", webapp.Name)
+	foundSecret := &corev1.Secret{}
+	secretExists := true
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: webapp.Namespace}, foundSecret); err != nil {
+		if errors.IsNotFound(err) {
+			secretExists = false
+		} else {
+			return err
+		}
+	}
+
 	desired := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      webapp.Name,
@@ -105,15 +117,20 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 8080},
 							},
-							Env: func() []corev1.EnvVar {
-								envs := make([]corev1.EnvVar, 0, len(webapp.Spec.Env))
-								for _, e := range webapp.Spec.Env {
-									envs = append(envs, corev1.EnvVar{
-										Name:  e.Name,
-										Value: e.Value,
-									})
+							Env: webapp.Spec.Env,
+							EnvFrom: func() []corev1.EnvFromSource {
+								if !secretExists {
+									return nil
 								}
-								return envs
+								return []corev1.EnvFromSource{
+									{
+										SecretRef: &corev1.SecretEnvSource{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: secretName,
+											},
+										},
+									},
+								}
 							}(),
 						},
 					},
@@ -139,6 +156,7 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 	existing.Spec.Replicas = desired.Spec.Replicas
 	existing.Spec.Template.Spec.Containers[0].Image = desired.Spec.Template.Spec.Containers[0].Image
 	existing.Spec.Template.Spec.Containers[0].Env = desired.Spec.Template.Spec.Containers[0].Env
+	existing.Spec.Template.Spec.Containers[0].EnvFrom = desired.Spec.Template.Spec.Containers[0].EnvFrom
 	return r.Patch(ctx, existing, patch)
 }
 
@@ -226,6 +244,7 @@ func (r *WebAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
+		Owns(&corev1.Secret{}).
 		Named("webapp").
 		Complete(r)
 }
