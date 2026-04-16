@@ -107,7 +107,7 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": webapp.Name},
+					Labels: map[string]string{"app": webapp.Name, "project": webapp.Name},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
