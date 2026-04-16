@@ -154,6 +154,7 @@ func (r *WebAppReconciler) reconcileDeployment(ctx context.Context, webapp *plat
 
 	patch := client.MergeFrom(existing.DeepCopy())
 	existing.Spec.Replicas = desired.Spec.Replicas
+	existing.Spec.Template.ObjectMeta.Labels = desired.Spec.Template.ObjectMeta.Labels
 	existing.Spec.Template.Spec.Containers[0].Image = desired.Spec.Template.Spec.Containers[0].Image
 	existing.Spec.Template.Spec.Containers[0].Env = desired.Spec.Template.Spec.Containers[0].Env
 	existing.Spec.Template.Spec.Containers[0].EnvFrom = desired.Spec.Template.Spec.Containers[0].EnvFrom
