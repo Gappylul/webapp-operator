@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,7 +40,8 @@ import (
 // WebAppReconciler reconciles a WebApp object
 type WebAppReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=platform.gappy.hu,resources=webapps,verbs=get;list;watch;create;update;patch;delete
@@ -49,6 +51,7 @@ type WebAppReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -64,16 +67,21 @@ func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	log.Info("Reconciling WebApp", "name", webapp.Name, "image", webapp.Spec.Image)
 
 	if err := r.reconcileDeployment(ctx, webapp); err != nil {
+		r.Recorder.Event(webapp, corev1.EventTypeWarning, "DeploymentFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("reconcile deployment: %w", err)
 	}
 
 	if err := r.reconcileService(ctx, webapp); err != nil {
+		r.Recorder.Event(webapp, corev1.EventTypeWarning, "ServiceFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("reconcile service: %w", err)
 	}
 
 	if err := r.reconcileIngress(ctx, webapp); err != nil {
+		r.Recorder.Event(webapp, corev1.EventTypeWarning, "IngressFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("reconcile ingress: %w", err)
 	}
+
+	r.Recorder.Event(webapp, corev1.EventTypeNormal, "Synced", "All resources reconciled successfully")
 
 	return ctrl.Result{}, nil
 }
