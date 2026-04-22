@@ -200,16 +200,19 @@ func (r *WebAppReconciler) reconcileService(ctx context.Context, webapp *platfor
 }
 
 func (r *WebAppReconciler) reconcileIngress(ctx context.Context, webapp *platformv1.WebApp) error {
+	ingressClassName := "traefik"
 	pathType := networkingv1.PathTypePrefix
 	desired := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      webapp.Name,
 			Namespace: webapp.Namespace,
 			Annotations: map[string]string{
-				"traefik.ingress.kubernetes.io/router.entrypoints": "web",
+				"traefik.ingress.kubernetes.io/router.entrypoints": "web, websecure",
+				"traefik.ingress.kubernetes.io/router.tls":         "true",
 			},
 		},
 		Spec: networkingv1.IngressSpec{
+			IngressClassName: &ingressClassName,
 			Rules: []networkingv1.IngressRule{
 				{
 					Host: webapp.Spec.Host,
